@@ -54,7 +54,7 @@ def get_images(args, model_teacher, hook_for_display, ipc_id):
             args.lr, 0, iterations_per_layer
         )  # 0 - do not use warmup
         criterion = nn.CrossEntropyLoss()
-        criterion = criterion.cuda()
+        # criterion = criterion.cuda()
 
         for iteration in range(iterations_per_layer):
             # learning rate scheduling
