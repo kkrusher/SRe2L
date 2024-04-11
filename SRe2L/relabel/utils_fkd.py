@@ -254,4 +254,4 @@ def get_img2batch_idx_list(num_img = 50000, batch_size = 1024, seed=42, epochs=3
             img2batch_idx[img_indices[0]] = batch_idx
 
         img2batch_idx_list.append(img2batch_idx)
-    return img2batch_idx_list
+    return img2batch_idx_list 

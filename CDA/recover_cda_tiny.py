@@ -34,13 +34,20 @@ def get_images(args, model_teacher, hook_for_display, ipc_id):
         targets = targets_all[kk : min(kk + batch_size, 200)].to("cuda")
 
         data_type = torch.float
-        inputs = torch.randn((targets.shape[0], 3, 64, 64), requires_grad=True, device="cuda", dtype=data_type)
+        inputs = torch.randn(
+            (targets.shape[0], 3, 64, 64),
+            requires_grad=True,
+            device="cuda",
+            dtype=data_type,
+        )
 
         iterations_per_layer = args.iteration
         lim_0, lim_1 = args.jitter, args.jitter
 
         optimizer = optim.Adam([inputs], lr=args.lr, betas=[0.5, 0.9], eps=1e-8)
-        lr_scheduler = lr_cosine_policy(args.lr, 0, iterations_per_layer)  # 0 - do not use warmup
+        lr_scheduler = lr_cosine_policy(
+            args.lr, 0, iterations_per_layer
+        )  # 0 - do not use warmup
         criterion = nn.CrossEntropyLoss()
         criterion = criterion.cuda()
 
@@ -59,10 +66,24 @@ def get_images(args, model_teacher, hook_for_display, ipc_id):
                     min_crop = 1.0
                 elif args.easy2hard_mode == "linear":
                     # min_crop linear decreasing: 1.0 -> 0.08
-                    min_crop = 0.08 + (1.0 - 0.08) * (1 - iteration / (args.milestone * iterations_per_layer))
+                    min_crop = 0.08 + (1.0 - 0.08) * (
+                        1 - iteration / (args.milestone * iterations_per_layer)
+                    )
                 elif args.easy2hard_mode == "cosine":
                     # min_crop cosine decreasing: 1.0 -> 0.08
-                    min_crop = 0.08 + (1.0 - 0.08) * (1 + np.cos(np.pi * iteration / (args.milestone * iterations_per_layer))) / 2
+                    min_crop = (
+                        0.08
+                        + (1.0 - 0.08)
+                        * (
+                            1
+                            + np.cos(
+                                np.pi
+                                * iteration
+                                / (args.milestone * iterations_per_layer)
+                            )
+                        )
+                        / 2
+                    )
 
             aug_function = transforms.Compose(
                 [
@@ -86,15 +107,24 @@ def get_images(args, model_teacher, hook_for_display, ipc_id):
             loss_ce = criterion(outputs, targets)
 
             # R_feature loss
-            rescale = [args.first_bn_multiplier] + [1.0 for _ in range(len(loss_r_feature_layers) - 1)]
-            loss_r_bn_feature = sum([mod.r_feature * rescale[idx] for (idx, mod) in enumerate(loss_r_feature_layers)])
+            rescale = [args.first_bn_multiplier] + [
+                1.0 for _ in range(len(loss_r_feature_layers) - 1)
+            ]
+            loss_r_bn_feature = sum(
+                [
+                    mod.r_feature * rescale[idx]
+                    for (idx, mod) in enumerate(loss_r_feature_layers)
+                ]
+            )
 
             # combining losses
             loss_aux = args.r_bn * loss_r_bn_feature
 
             loss = loss_ce + loss_aux
 
-            if (iteration % save_every == 0 or iteration == iterations_per_layer - 1) and hook_for_display is not None:
+            if (
+                iteration % save_every == 0 or iteration == iterations_per_layer - 1
+            ) and hook_for_display is not None:
                 print("------------iteration {}----------".format(iteration))
                 print("loss_ce", loss_ce.item())
                 print("loss_r_bn_feature", loss_r_bn_feature.item())
@@ -192,7 +222,9 @@ def main_syn(args, ipc_id):
     import torchvision
 
     model = torchvision.models.get_model(args.arch_name, weights=False, num_classes=200)
-    model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    model.conv1 = nn.Conv2d(
+        3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+    )
     model.maxpool = nn.Identity()
 
     checkpoint = torch.load(args.arch_path, map_location="cpu")
@@ -206,9 +238,13 @@ def main_syn(args, ipc_id):
     if args.verifier:
         model = models.__dict__["mobilenet_v2"](pretrained=False)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, 200)
-        model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        model.conv1 = nn.Conv2d(
+            3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        )
         model.maxpool = nn.Identity()
-        checkpoint = torch.load("/path/to/mobilenetv2_tiny/checkpoint.pth", map_location="cpu")
+        checkpoint = torch.load(
+            "/path/to/mobilenetv2_tiny/checkpoint.pth", map_location="cpu"
+        )
 
         model.load_state_dict(checkpoint["model"])
 
@@ -226,22 +262,77 @@ def main_syn(args, ipc_id):
 def parse_args():
     parser = argparse.ArgumentParser("CDA for ImageNet-1K")
     """Data save flags"""
-    parser.add_argument("--exp-name", type=str, default="test", help="name of the experiment, subfolder under syn_data_path")
-    parser.add_argument("--syn-data-path", type=str, default="./syn-data", help="where to store synthetic data")
-    parser.add_argument("--store-best-images", action="store_true", help="whether to store best images")
+    parser.add_argument(
+        "--exp-name",
+        type=str,
+        default="test",
+        help="name of the experiment, subfolder under syn_data_path",
+    )
+    parser.add_argument(
+        "--syn-data-path",
+        type=str,
+        default="./syn-data",
+        help="where to store synthetic data",
+    )
+    parser.add_argument(
+        "--store-best-images", action="store_true", help="whether to store best images"
+    )
     """Optimization related flags"""
-    parser.add_argument("--batch-size", type=int, default=100, help="number of images to optimize at the same time")
-    parser.add_argument("--iteration", type=int, default=1000, help="num of iterations to optimize the synthetic data")
-    parser.add_argument("--lr", type=float, default=0.1, help="learning rate for optimization")
-    parser.add_argument("--jitter", default=4, type=int, help="random shift on the synthetic data")
-    parser.add_argument("--r-bn", type=float, default=0.05, help="coefficient for BN feature distribution regularization")
-    parser.add_argument("--first-bn-multiplier", type=float, default=10.0, help="additional multiplier on first bn layer of R_bn")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="number of images to optimize at the same time",
+    )
+    parser.add_argument(
+        "--iteration",
+        type=int,
+        default=1000,
+        help="num of iterations to optimize the synthetic data",
+    )
+    parser.add_argument(
+        "--lr", type=float, default=0.1, help="learning rate for optimization"
+    )
+    parser.add_argument(
+        "--jitter", default=4, type=int, help="random shift on the synthetic data"
+    )
+    parser.add_argument(
+        "--r-bn",
+        type=float,
+        default=0.05,
+        help="coefficient for BN feature distribution regularization",
+    )
+    parser.add_argument(
+        "--first-bn-multiplier",
+        type=float,
+        default=10.0,
+        help="additional multiplier on first bn layer of R_bn",
+    )
     """Model related flags"""
-    parser.add_argument("--arch-name", type=str, default="resnet18", help="arch name from pretrained torchvision models")
+    parser.add_argument(
+        "--arch-name",
+        type=str,
+        default="resnet18",
+        help="arch name from pretrained torchvision models",
+    )
     parser.add_argument("--arch-path", type=str, default="")
-    parser.add_argument("--verifier", action="store_true", help="whether to evaluate synthetic data with another model")
-    parser.add_argument("--verifier-arch", type=str, default="mobilenet_v2", help="arch name from torchvision models to act as a verifier")
-    parser.add_argument("--easy2hard-mode", default="cosine", type=str, choices=["step", "linear", "cosine"])
+    parser.add_argument(
+        "--verifier",
+        action="store_true",
+        help="whether to evaluate synthetic data with another model",
+    )
+    parser.add_argument(
+        "--verifier-arch",
+        type=str,
+        default="mobilenet_v2",
+        help="arch name from torchvision models to act as a verifier",
+    )
+    parser.add_argument(
+        "--easy2hard-mode",
+        default="cosine",
+        type=str,
+        choices=["step", "linear", "cosine"],
+    )
     parser.add_argument("--milestone", default=0, type=float)
     parser.add_argument("--G", default="-1", type=str)
     parser.add_argument("--ipc-start", default=0, type=int)
